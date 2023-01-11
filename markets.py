@@ -4,15 +4,16 @@
 	Developer: Fergus W. Clare
 	Contact: fergus@vinst.io
 	Date: 12/31/2018
-	Version: 1.0
-	License: Access Restricted, Proprietary
+	Last Updated: 01/10/2023
+	Version: 1.1
+	License: MIT Commons
 '''
 
 import calendar
 from datetime import datetime, timedelta, date
 from pytz import timezone
 
-class USActiveTrading (object):
+class USActiveStockTrading (object):
 
 	def __init__(self, year=None):
 		'''
@@ -21,6 +22,9 @@ class USActiveTrading (object):
 			caller does not provide a date in integer format, the object
 			will calculate the current year and use that for all other
 			services in returning data.
+
+			See this webpage for stock market holidays and halfday sessions:
+			https://www.kiplinger.com/investing/stock-market-holidays
 
 			Example usage:
 			==============
@@ -39,7 +43,7 @@ class USActiveTrading (object):
 		self.tz = timezone('EST')
 		if year:
 			self.year = year
-		else:
+		else: #if no year is provided, set to current year
 			self.year = datetime.now(self.tz).year
 		self.month = datetime.strftime(datetime.now(self.tz), '%m')
 		self.day = datetime.strftime(datetime.now(self.tz), '%d')
@@ -49,22 +53,37 @@ class USActiveTrading (object):
 		self.current_time_EST = datetime.strftime(datetime.now(self.tz), '%H:%M')
 		self.weekday_index = datetime.now(self.tz).weekday()
 		self.holidays = [ #see https://www.nyse.com/markets/hours-calendars for future holidays
-			'{}'.format(self.nyd()), #nyday
-			'{}'.format(self.mlk_day()), #mlkday
-			'{}'.format(self.presidents_day()), #presday
-			'{}'.format(self.good_friday()), #goodfriday
-			'{}'.format(self.memorial_day()), #memorialday
-			'{}'.format(self.independence()), #independence
-			'{}'.format(self.labor_day()), #laborday
-			'{}'.format(self.thanksgiving()), #thanksgiving
-			'{}'.format(self.christmas()) #christmas
+			f'{self.nyd()}', #nyday
+			f'{self.mlk_day()}', #mlkday
+			f'{self.presidents_day()}', #presday
+			f'{self.good_friday()}', #goodfriday
+			f'{self.memorial_day()}', #memorialday
+			f'{self.juneteenth()}', #juneteenth
+			f'{self.independence()}', #independence
+			f'{self.labor_day()}', #laborday
+			f'{self.thanksgiving()}', #thanksgiving
+			f'{self.christmas()}' #christmas
 		]
+		self.holiday_closures() #append closures for holidays on weekends to holidays list
+		self.holidays.sort()
 		self.halfdays = self.halfday_sessions()
 		self.last_active_day = self.get_last_open()
 
 #############################################
 #		SETTER METHODS FOR HOLIDAYS			#
 #############################################
+	def holiday_closures(self):
+		for day in self.holidays:
+			year = int(day[:4])
+			month = int(day[4:6])
+			d = int(day[6:8])
+			
+			if self.weekday_of_holiday(month, d) == 6: #if the holiday falls on a sunday, monday is the observed holiday so advance to tuesday
+				self.holidays.append(datetime.strftime(datetime.strptime(day, '%Y%m%d') + timedelta(days=1), '%Y%m%d'))
+			
+			elif self.weekday_of_holiday(month, d) == 5: #if the holiday falls on a saturday, friday is the observed holiday so advance to thursday
+				self.holidays.append(datetime.strftime(datetime.strptime(day, '%Y%m%d') - timedelta(days=1), '%Y%m%d'))
+
 		
 	def nyd(self, day_only=False):
 		'''
@@ -81,7 +100,8 @@ class USActiveTrading (object):
 			>>> markets.ActiveTrading().nyd()
 			>>> 20190101 #for 2019
 		'''
-		return '01' if day_only==True else '{}0101'.format(self.year)
+		nyd = f'{self.year}0101'
+		return '01' if day_only==True else nyd
 
 	def mlk_day(self, day_only=False):
 		'''
@@ -95,7 +115,7 @@ class USActiveTrading (object):
 		'''
 		weeks = calendar.monthcalendar(self.year, 1)
 		third_week = lambda weeks: weeks[3] if weeks[0][0] == 0 else weeks[2]
-		return third_week(weeks)[0] if day_only==True else '{}01{}'.format(self.year, third_week(weeks)[0])
+		return third_week(weeks)[0] if day_only==True else f'{self.year}01{third_week(weeks)[0]}'
 
 	def presidents_day(self, day_only=False):
 		'''
@@ -109,7 +129,7 @@ class USActiveTrading (object):
 		'''
 		weeks = calendar.monthcalendar(self.year, 2)
 		third_week = lambda weeks: weeks[3] if weeks[0][0] == 0 else weeks[2]
-		return third_week(weeks)[0] if day_only==True else '{}02{}'.format(self.year, third_week(weeks)[0])
+		return third_week(weeks)[0] if day_only==True else f'{self.year}02{third_week(weeks)[0]}'
 
 	def good_friday(self, day_only=False):
 		'''
@@ -128,7 +148,7 @@ class USActiveTrading (object):
 		f = d + e - 7 * ((a + 11 * d + 22 * e) // 451) + 114
 		month = f // 31
 		day = f % 31 + 1
-		return datetime.strftime(date(self.year, month, day)-timedelta(2), '%d') if day_only==True else '{}04{}'.format(self.year, datetime.strftime(date(self.year, month, day)-timedelta(2), '%d'))    
+		return datetime.strftime(date(self.year, month, day)-timedelta(2), '%d') if day_only==True else '{}04{}'.format(self.year, datetime.strftime(date(self.year, month, day)-timedelta(2), '%d'))
 		
 	def memorial_day(self, day_only=False):
 		'''
@@ -141,10 +161,13 @@ class USActiveTrading (object):
 			>>> 27 #for 2019
 		'''
 		weeks = calendar.monthcalendar(self.year, 5)
-		return max(weeks)[0] if day_only==True else '{}05{}'.format(self.year, max(weeks)[0]) # since monday is always the first day of the week, there will not be any instaces where max monday == 0
+		return max(weeks)[0] if day_only==True else f'{self.year}05{max(weeks)[0]}' # since monday is always the first day of the week, there will not be any instaces where max monday == 0
+
+	def juneteenth(self, day_only=False):
+		return '19' if day_only==True else f'{self.year}0619'
 
 	def independence(self, day_only=False):
-		return '04' if day_only==True else '{}0704'.format(self.year)
+		return '04' if day_only==True else f'{self.year}0704'
 
 	def labor_day(self, day_only=False):
 		'''
@@ -158,7 +181,7 @@ class USActiveTrading (object):
 		'''
 		weeks = calendar.monthcalendar(self.year, 9)
 		first_week = lambda weeks: weeks[1] if weeks[0][0] == 0 else weeks[0]
-		return first_week(weeks)[0] if day_only==True else '{}090{}'.format(self.year, first_week(weeks)[0])
+		return first_week(weeks)[0] if day_only==True else f'{self.year}090{first_week(weeks)[0]}'
 	
 	def thanksgiving(self, day_only=False):
 		'''
@@ -173,7 +196,7 @@ class USActiveTrading (object):
 		weeks = calendar.monthcalendar(self.year, 11) #get all dates of the month of November in list format
 		fourth_thurs = lambda weeks: weeks[4][3] if weeks[0][3] == 0 else weeks[3][3] #return day format as dd for the fourth thursday in the month
 		thanks_index = lambda weeks: 4 if weeks [0][3] == 0 else 3 #return the index of the day in the week for thanksgiving day
-		return weeks[thanks_index(weeks)].index(forth_thurs) if day_only==True else '{}11{}'.format(self.year, fourth_thurs(weeks)) #always the fourth Thursday in November 
+		return weeks[thanks_index(weeks)].index(forth_thurs) if day_only==True else f'{self.year}11{fourth_thurs(weeks)}' #always the fourth Thursday in November 
 
 	def christmas(self, day_only=False):
 		'''
@@ -191,9 +214,9 @@ class USActiveTrading (object):
 		x = [25 in i for i in weeks] # find the week with Christmas day
 		holiday_week = weeks[x.index(True)] # find the week index in range
 		if 5 >= holiday_week.index(25): # if the day of the week < Saturday
-			return '25' if day_only==True else '{}12{}'.format(self.year, 25) # return Christmas day
+			return '25' if day_only==True else f'{self.year}12{25}' # return Christmas day
 		else: # if the day of the week >= Saturday
-			return '24' if day_only==True else '{}12{}'.format(self.year, 24) # return Christmas eve day
+			return '24' if day_only==True else f'{self.year}12{24}' # return Christmas eve day
 
 #############################################
 #				GETTER METHODS				#
@@ -241,8 +264,10 @@ class USActiveTrading (object):
 			>>> markets.USActiveTrading().is_open()
 			>>> True
 		'''
+		if date in self.holidays:
+			return False
 
-		if isinstance(date, datetime) == True:
+		elif isinstance(date, datetime) == True:
 		# if a raw date has been provided by the caller
 		#set all values in the list to truthy.  If false in list, market is not open.
 			x = [
@@ -277,6 +302,10 @@ class USActiveTrading (object):
 			Intelligently checks if date provided is datetime or string and returns
 			the next market open date as a string regardless of format date is delivered to function
 			in.
+			
+			Parameters:
+				- Instantiated object
+				- Takes date as string formatted as 'yyyymmdd' or 'yyyy-mm-dd'
 
 			Example usage:
 			>>> from markets import USActiveTrading
@@ -291,11 +320,13 @@ class USActiveTrading (object):
 			>>> opm.next_open(new_date)
 			'20210809'
 		'''
+
 		if isinstance(date, datetime) == True: # if the date provided is in datetime format
 			if self.is_open(date) == False: # if date provided is not an active trading day
 				return self.next_open(date + timedelta(days=1)) # increment the day by 1 and call recursively
 			else: # if the date provided is active trading day
 				return datetime.strftime(date, '%Y-%m%-d') # return the day as a string object
+
 		elif isinstance(date, str) == True: # if the date parameter is passed as a string
 			if self.is_open(date) == False: # if the date is not an active trading day
 				# convert string to datetime object
@@ -303,6 +334,7 @@ class USActiveTrading (object):
 			else: # if the market is active on the day provided
 				date = '-'.join([date[:4], date[4:6], date[6:]])
 				return date
+
 
 	def is_closed(self):
 		'''
@@ -314,7 +346,7 @@ class USActiveTrading (object):
 		'''
 		return False if self.is_open() == True else True
 
-	def weekday_of_holiday(self, month, day):
+	def weekday_of_holiday(self, month=None, day=None, full_date=None):
 		'''
 			Returns the day of the week from 0-6 for the user
 			provided month and day of the current year.
@@ -327,11 +359,12 @@ class USActiveTrading (object):
 
 			Example usage:
 			==============
-			>>> markets.ActiveTrading().is_off_holiday(12,25)
+			>>> markets.ActiveTrading().weekday_of_holiday(12,25)
 			>>> 1 #Tuesday is Christmas for 2018
 			>>> markets.ActiveTrading().is_off_holiday(1,1)
 			>>> 0 #Monday is New Years for 2018	
 		'''
+
 		weeks = calendar.monthcalendar(self.year, month) #set weeks to the calendar month provided for the current year during class instantiation
 		for week in weeks: #loop through each week in the weeks list
 			if day in week: #if the day provided by the caller is in the list of the week
@@ -356,13 +389,11 @@ class USActiveTrading (object):
 			>>> markets.ActiveTrading().halfday_sessions()
 			>>> ['20190704', '20191128', '20191225'] #for Independence, Thanksgiving and Christmas days in 2019
 		'''
-		halfs=['{}'.format(self.thanksgiving())] #set the new halfdays list adding thanksgiving which always occurs on a thursday
+		halfs=[f'{self.year}'+'1124'] #set the new halfdays list adding day after thanksgiving which always occurs on a Friday
 		ind = self.weekday_of_holiday(7,int(self.independence(day_only=True))) #get the month and day for independence day (celebrated)
 		christmas = self.weekday_of_holiday(12, int(self.christmas(day_only=True))) #get the month and day for Christmas day (celebrated)
-		if 4 > ind > 0: #if independence day does not fall on a Friday
-			halfs.append(self.independence()) #add independence day to the halfdays list
-		if christmas < 5 and self.christmas(day_only=True) == '25': #if Christmas is a Saturday and the date of observance is the 25th
-			halfs.append(self.christmas()) #add Christmas to the halfdays observed list
+		if 4 >= ind > 0: #if independence day does not fall on a Friday or monday
+			halfs.append(f'{self.year}'+'0703') #add independence day to the halfdays list
 		return halfs #return the list of halfdays
 
 	def get_last_month_number(self):
@@ -412,7 +443,7 @@ class USActiveTrading (object):
 			date_data = '{}{}{}'.format(
 				self.year, 
 				self.month, 
-				month[w_index-1][3] if len(list(str(month[w_index][3]))) > 1 else '0{}'.format(month[w_index][3])) 
+				month[w_index-1][3] if len(list(str(month[w_index][3]))) > 1 else f'0{month[w_index][3]}') 
 			return self.recursion(datetime.strptime(date_data, '%Y%m%d')) #return Thursday
 		elif self.weekday_index == 0 and self.is_open() == True:
 			date_data = datetime.strftime(datetime.now(self.tz) - timedelta(3), '%Y%m%d') 
