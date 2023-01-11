@@ -335,6 +335,47 @@ class USActiveStockTrading (object):
 				date = '-'.join([date[:4], date[4:6], date[6:]])
 				return date
 
+	def last_close(self, date):
+		'''
+			Function provides the next market open date when the date provided to the 
+			function is not open.  Relies on the self.is_open() to determine market 
+			availability.
+
+			Intelligently checks if date provided is datetime or string and returns
+			the next market open date as a string regardless of format date is delivered to function
+			in.
+			
+			Parameters:
+				- Instantiated object
+				- Takes date as string formatted as 'yyyymmdd' or 'yyyy-mm-dd'
+
+			Example usage:
+			>>> from markets import USActiveTrading
+			>>> from datetime import datetime
+			>>> opm = USActiveTrading()
+			>>> date = '20210807' (market is not open on this day)
+			>>> opm.next_open(date)
+			'20210809'
+			>>> new_date = datetime.strptime(date, '%Y%m%d')
+			>>> new_date
+			datetime.datetime(2021, 8, 7, 0, 0)
+			>>> opm.next_open(new_date)
+			'20210809'
+		'''
+
+		if isinstance(date, datetime) == True: # if the date provided is in datetime format
+			if self.is_open(date) == False: # if date provided is not an active trading day
+				return self.last_close(date - timedelta(days=1)) # increment the day by 1 and call recursively
+			else: # if the date provided is active trading day
+				return datetime.strftime(date, '%Y-%m%-d') # return the day as a string object
+
+		elif isinstance(date, str) == True: # if the date parameter is passed as a string
+			if self.is_open(date) == False: # if the date is not an active trading day
+				# convert string to datetime object
+				return self.last_close(datetime.strftime(datetime.strptime(date, '%Y%m%d') - timedelta(days=1), '%Y%m%d'))
+			else: # if the market is active on the day provided
+				date = '-'.join([date[:4], date[4:6], date[6:]])
+				return date
 
 	def is_closed(self):
 		'''
